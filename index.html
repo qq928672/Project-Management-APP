@@ -51,6 +51,7 @@
         const Percent = (p) => <Icon {...p}><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></Icon>;
         const HardDrive = (p) => <Icon {...p}><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></Icon>;
         const AlertCircle = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></Icon>;
+        const Edit2 = (p) => <Icon {...p}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></Icon>;
 
         // --- 主程式 ---
 
@@ -120,13 +121,19 @@
                 ));
             };
 
+            // 新增任務 (包含初始化 checklist)
             const addTask = (projectId, taskTitle) => {
                 if (!taskTitle.trim()) return;
                 setProjects(projects.map(p => {
                     if (p.id === projectId) {
                         return {
                             ...p,
-                            tasks: [...p.tasks, { id: Date.now(), title: taskTitle, progress: 0 }]
+                            tasks: [...p.tasks, { 
+                                id: Date.now(), 
+                                title: taskTitle, 
+                                progress: 0,
+                                checklist: [] // 初始化細項陣列
+                            }]
                         };
                     }
                     return p;
@@ -173,6 +180,101 @@
                 }));
             };
 
+            // --- 細項 (Checklist) 邏輯 ---
+
+            const addCheckItem = (projectId, taskId, text) => {
+                if (!text.trim()) return;
+                setProjects(projects.map(p => {
+                    if (p.id === projectId) {
+                        return {
+                            ...p,
+                            tasks: p.tasks.map(t => {
+                                if (t.id === taskId) {
+                                    return {
+                                        ...t,
+                                        checklist: [...(t.checklist || []), { id: Date.now(), text, completed: false }]
+                                    };
+                                }
+                                return t;
+                            })
+                        };
+                    }
+                    return p;
+                }));
+            };
+
+            const toggleCheckItem = (projectId, taskId, itemId) => {
+                setProjects(projects.map(p => {
+                    if (p.id === projectId) {
+                        return {
+                            ...p,
+                            tasks: p.tasks.map(t => {
+                                if (t.id === taskId) {
+                                    return {
+                                        ...t,
+                                        checklist: (t.checklist || []).map(i => 
+                                            i.id === itemId ? { ...i, completed: !i.completed } : i
+                                        )
+                                    };
+                                }
+                                return t;
+                            })
+                        };
+                    }
+                    return p;
+                }));
+            };
+
+            const deleteCheckItem = (projectId, taskId, itemId) => {
+                 setProjects(projects.map(p => {
+                    if (p.id === projectId) {
+                        return {
+                            ...p,
+                            tasks: p.tasks.map(t => {
+                                if (t.id === taskId) {
+                                    return {
+                                        ...t,
+                                        checklist: (t.checklist || []).filter(i => i.id !== itemId)
+                                    };
+                                }
+                                return t;
+                            })
+                        };
+                    }
+                    return p;
+                }));
+            };
+
+            const editCheckItem = (projectId, taskId, itemId) => {
+                const project = projects.find(p => p.id === projectId);
+                const task = project.tasks.find(t => t.id === taskId);
+                const item = task.checklist.find(i => i.id === itemId);
+                
+                const newText = prompt("修改細項內容：", item.text);
+                if (newText !== null && newText.trim() !== "") {
+                     setProjects(projects.map(p => {
+                        if (p.id === projectId) {
+                            return {
+                                ...p,
+                                tasks: p.tasks.map(t => {
+                                    if (t.id === taskId) {
+                                        return {
+                                            ...t,
+                                            checklist: (t.checklist || []).map(i => 
+                                                i.id === itemId ? { ...i, text: newText } : i
+                                            )
+                                        };
+                                    }
+                                    return t;
+                                })
+                            };
+                        }
+                        return p;
+                    }));
+                }
+            };
+
+            // --- 計算進度 (不包含 checklist) ---
             const calculateProgressValue = (project, forceAuto = false) => {
                 if (project.mode === 'manual' && !forceAuto) {
                     return project.manualProgress;
@@ -481,6 +583,73 @@
                                                                         className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer transition-colors ${task.progress === 100 ? 'bg-green-200 accent-green-500' : 'bg-gray-200 accent-indigo-500'}`}
                                                                     />
                                                                 </div>
+
+                                                                {/* Checklist (細項) */}
+                                                                <div className="mt-4 bg-gray-50 rounded-lg p-3 border border-dashed border-gray-300">
+                                                                    <h5 className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
+                                                                        <LayoutList className="w-3 h-3" />
+                                                                        執行細項 (確認用，不影響 %)
+                                                                    </h5>
+                                                                    
+                                                                    {/* Render Checklist Items */}
+                                                                    {(task.checklist || []).map(item => (
+                                                                        <div key={item.id} className="flex items-center gap-2 mb-2 group/item">
+                                                                            <button 
+                                                                                onClick={() => toggleCheckItem(project.id, task.id, item.id)}
+                                                                                className="hover:opacity-75 transition-opacity"
+                                                                            >
+                                                                                {item.completed ? (
+                                                                                    <CheckSquare className="w-4 h-4 text-blue-500"/> 
+                                                                                ) : (
+                                                                                    <div className="w-4 h-4 border-2 border-gray-300 rounded bg-white hover:border-blue-400"></div>
+                                                                                )}
+                                                                            </button>
+                                                                            <span className={`text-sm flex-1 ${item.completed ? "line-through text-gray-400" : "text-gray-700"}`}>
+                                                                                {item.text}
+                                                                            </span>
+                                                                            <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                                <button 
+                                                                                    onClick={() => editCheckItem(project.id, task.id, item.id)}
+                                                                                    className="p-1 text-gray-400 hover:text-blue-500"
+                                                                                    title="修改文字"
+                                                                                >
+                                                                                    <Edit2 className="w-3 h-3" />
+                                                                                </button>
+                                                                                <button 
+                                                                                    onClick={() => deleteCheckItem(project.id, task.id, item.id)}
+                                                                                    className="p-1 text-gray-400 hover:text-red-500"
+                                                                                    title="刪除"
+                                                                                >
+                                                                                    <Trash2 className="w-3 h-3" />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+
+                                                                    {/* Add Checklist Item Input */}
+                                                                    <form 
+                                                                        onSubmit={(e) => {
+                                                                            e.preventDefault();
+                                                                            const input = e.target.elements.checkInput;
+                                                                            addCheckItem(project.id, task.id, input.value);
+                                                                            input.value = '';
+                                                                        }}
+                                                                        className="flex gap-2 mt-2"
+                                                                    >
+                                                                        <input 
+                                                                            name="checkInput"
+                                                                            placeholder="新增細項 (例如：草稿完成)..." 
+                                                                            className="text-sm border border-gray-300 rounded px-2 py-1 flex-1 focus:outline-none focus:border-blue-400"
+                                                                        />
+                                                                        <button 
+                                                                            type="submit" 
+                                                                            className="text-xs bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 rounded px-3 py-1 font-medium"
+                                                                        >
+                                                                            +
+                                                                        </button>
+                                                                    </form>
+                                                                </div>
+
                                                             </div>
                                                         ))}
                                                     </div>
